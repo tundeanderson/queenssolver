@@ -36,16 +36,8 @@ def detect_grid_region():
     if grid_width == 0 or grid_height == 0:
         raise ValueError("Grid not found on the screen.")
 
-    # Debug: Draw the detected grid region on the original image and save it
-    debug_image = screen_image.copy()
-    cv2.rectangle(debug_image, (grid_x, grid_y), (grid_x + grid_width, grid_y + grid_height), (0, 255, 0), 2)
-    debug_image_path = "grid_region_debug.png"
-    cv2.imwrite(debug_image_path, cv2.cvtColor(debug_image, cv2.COLOR_RGB2BGR))
-    logging.info(f"Debug image with detected grid region saved to {debug_image_path}")
-
     logging.info(f"Detected grid region: (x={grid_x}, y={grid_y}, width={grid_width}, height={grid_height})")
     return grid_x, grid_y, grid_width, grid_height
-
 
 def capture_and_analyze_grid(grid_region):
     """
@@ -59,19 +51,11 @@ def capture_and_analyze_grid(grid_region):
     screenshot = pyautogui.screenshot(region=(x, y, width, height))
     image = np.array(screenshot)
 
-    # Save the cropped region for debugging
-    debug_image_path = "cropped_grid_region.png"
-    cv2.imwrite(debug_image_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-    logging.info(f"Cropped grid region saved to {debug_image_path}")
-
     # Convert the image to grayscale
     gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
     # Apply binary thresholding to highlight grid lines
     _, binary_image = cv2.threshold(gray_image, 50, 255, cv2.THRESH_BINARY_INV)
-
-    # Save the binary image for debugging
-    cv2.imwrite("binary_grid_debug.png", binary_image)
 
     # Sum pixel intensities along rows and columns
     row_sums = np.sum(binary_image, axis=1)  # Sum along rows
@@ -133,34 +117,11 @@ def capture_and_analyze_grid(grid_region):
 
     return cells
 
-def click_identified_cells(grid_region, grid):
-    """
-    Clicks on the center of the identified cells using pyautogui.
-    :param grid_region: A tuple (x, y, width, height) representing the grid's region.
-    :param grid: The Grid object containing the identified cells.
-    """
-    x, y, width, height = grid_region
-    cell_width = width // grid.cols
-    cell_height = height // grid.rows
-
-    for group in grid.groups:
-        if group.identified_cell:
-            # Calculate the screen coordinates of the cell's center
-            cell = group.identified_cell
-            center_x = x + cell.col * cell_width + cell_width // 2
-            center_y = y + cell.row * cell_height + cell_height // 2
-
-            # Perform the mouse click
-            logging.info(f"Clicking on cell at ({center_x}, {center_y})")
-            pyautogui.doubleClick(center_x, center_y)
-
-            # Add a small delay between clicks
-            time.sleep(0.1)
-
 if __name__ == "__main__":
     try:
         logging.info("Starting grid detection...")
 
+        # Wait for puzzle to appear on screen
         while True:
             try:
                 # Detect the grid region dynamically
@@ -173,16 +134,8 @@ if __name__ == "__main__":
                 logging.info("No grid detected, waiting...")
                 time.sleep(1)
         
-        grid = Grid(cells)
-
-        logging.info("Grid successfully built.")
-        grid.log_groups()  # Log group details
-
-        grid.solve()  # Solve the Queens game
-        #grid.visualize(title="Grid and Groups Visualization")
-
-        # Click on the identified cells
-        click_identified_cells(grid_region, grid)
+        grid = Grid(cells, grid_region)
+        grid.solve()
 
     except ValueError as e:
         logging.error(f"Error: {e}")

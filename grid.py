@@ -1,12 +1,14 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import logging
+import pyautogui
+import logging, time
 
 class Grid():
     """
     Represents the entire grid of cells.
     """
-    def __init__(self, cells):
+    def __init__(self, cells, region):
+        self.region = region
         self.rows = len(cells)
         self.cols = len(cells[0]) if self.rows > 0 else 0
         self.cells = [[None for _ in range(self.cols)] for _ in range(self.rows)]
@@ -57,8 +59,10 @@ class Grid():
                 if col < self.cols - 1:
                     cell.neighbors["right"] = self.get_cell(row, col + 1)
 
-        # Group cells
         self.group_cells()
+        self.assign_groups()
+
+        logging.info("Grid successfully built.")
 
     def group_cells(self, color_similarity_threshold=1000):
         """
@@ -98,8 +102,17 @@ class Grid():
                     dfs(cell, group)
                     self.groups.append(group)
 
+    def assign_groups(self):
+        """
+        Assign groups, the number of cells in each group, their colors, and the cells in each group.
+        """
+        logging.info(f"Total number of groups: {len(self.groups)}")
+        for i, group in enumerate(self.groups, start=1):
+            cell_positions = [(cell.row, cell.col) for cell in group.cells]
+            logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_positions}")
+
     
-    def solve(self):
+    def solve(self, debug=False):
         """
         Solves the Queens game by identifying one cell in each group such that:
         - Exactly one cell is identified in each row, column, and group.
@@ -164,6 +177,35 @@ class Grid():
         for group in self.groups:
             logging.info(f"Group {group.color}: Identified Cell = ({group.identified_cell.row}, {group.identified_cell.col})")
 
+        if not debug:
+            # Click on the identified cells if not in debug mode
+            self.click_identified_cells()
+        else:
+            self.visualize(title="Grid and Groups")
+
+    def click_identified_cells(self):
+        """
+        Clicks on the center of the identified cells using pyautogui.
+        :param grid_region: A tuple (x, y, width, height) representing the grid's region.
+        :param grid: The Grid object containing the identified cells.
+        """
+        x, y, width, height = self.region
+        cell_width = width // self.cols
+        cell_height = height // self.rows
+
+        for group in self.groups:
+            if group.identified_cell:
+                # Calculate the screen coordinates of the cell's center
+                cell = group.identified_cell
+                center_x = x + cell.col * cell_width + cell_width // 2
+                center_y = y + cell.row * cell_height + cell_height // 2
+
+                # Perform the mouse click
+                logging.info(f"Clicking on cell at ({center_x}, {center_y})")
+                pyautogui.doubleClick(center_x, center_y)
+
+                time.sleep(0.05)
+
     def visualize(self, title="Grid Visualization"):
         """
         Visualizes the grid and groups using matplotlib.
@@ -197,8 +239,8 @@ class Grid():
                         if group.identified_cell == cell:
                             ax.text(
                                 col + 0.5,
-                                flipped_row + 0.5,  # Centered in the cell
-                                "♛",  # Queen's crown icon
+                                flipped_row + 0.5,
+                                "♛", 
                                 color="black",
                                 ha="center",
                                 va="center",
@@ -206,18 +248,8 @@ class Grid():
                                 fontweight="bold",
                             )
 
-        # Add title and show the plot
         ax.set_title(title)
         plt.show()
-
-    def log_groups(self):
-        """
-        Logs the number of groups, the number of cells in each group, their colors, and the cell positions in each group.
-        """
-        logging.info(f"Total number of groups: {len(self.groups)}")
-        for i, group in enumerate(self.groups, start=1):
-            cell_positions = [(cell.row, cell.col) for cell in group.cells]
-            logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_positions}")
 
 class Cell():
     """
@@ -240,7 +272,7 @@ class GridGroup():
     def __init__(self, color):
         self.color = color  # RGB tuple
         self.cells = []
-        self.identified_cell = None  # Optional marker for a specific cell
+        self.marked_cell = None  # Optional marker for marked cell in group
 
     def add_cell(self, cell):
         """

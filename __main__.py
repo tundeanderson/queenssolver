@@ -72,6 +72,9 @@ def capture_and_analyze_grid(grid_region):
         threshold = np.max(sums) * 0.5  # Threshold for significant intensity
         lines = [i for i, value in enumerate(sums) if value > threshold]
 
+        if not lines:
+            return []
+
         # Group nearby lines to account for line thickness
         grouped_lines = []
         current_group = [lines[0]]
@@ -91,7 +94,6 @@ def capture_and_analyze_grid(grid_region):
     if len(horizontal_lines) != len(vertical_lines):
         raise ValueError("Mismatch between detected horizontal and vertical lines.")
     
-    # LinkedIn preview workaround
     if len(horizontal_lines) < 5 or len(vertical_lines) < 5:
         raise ValueError("Too few grid lines detected")
 
@@ -102,18 +104,13 @@ def capture_and_analyze_grid(grid_region):
     # Extract cell colors
     cell_width = width // grid_size
     cell_height = height // grid_size
-    cells = []
-    for row in range(grid_size):
-        cell_row = []
-        for col in range(grid_size):
-            # Calculate the center of the cell
-            center_x = col * cell_width + cell_width // 2
-            center_y = row * cell_height + cell_height // 2
-
-            # Get the color at the center of the cell
-            pixel_color = image[center_y, center_x]
-            cell_row.append(tuple(pixel_color))  # Convert to RGB tuple
-        cells.append(cell_row)
+    cells = [
+        [
+            tuple(image[row * cell_height + cell_height // 2, col * cell_width + cell_width // 2])
+            for col in range(grid_size)
+        ]
+        for row in range(grid_size)
+    ]
 
     return cells
 

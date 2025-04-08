@@ -9,61 +9,126 @@ import matplotlib.pyplot as plt
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
-def detect_grid_size(image):
+def detect_grid_region():
     """
-    Detects the grid size (n x n) by analyzing the image for grid lines.
+    Detects the region of the grid on the screen, assuming it is encased within a black border.
+    :return: A tuple (x, y, width, height) representing the grid's region.
     """
-    gray_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
-    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
-    edges = cv2.Canny(blurred_image, threshold1=350, threshold2=400)
-    lines = cv2.HoughLinesP(edges, rho=1, theta=np.pi/180, threshold=50, minLineLength=475, maxLineGap=50)
+    # Capture the entire screen
+    screenshot = pyautogui.screenshot()
+    screen_image = np.array(screenshot)
 
-    if lines is None:
-        raise ValueError("No grid lines detected.")
+    # Convert the screenshot to grayscale
+    gray_screen = cv2.cvtColor(screen_image, cv2.COLOR_RGB2GRAY)
 
-    horizontal_lines = set()
-    vertical_lines = set()
+    # Apply binary thresholding to highlight the black border
+    _, binary_image = cv2.threshold(gray_screen, 50, 255, cv2.THRESH_BINARY_INV)
 
-    for line in lines:
-        x1, y1, x2, y2 = line[0]
-        if abs(y1 - y2) < 10:  # Horizontal line
-            horizontal_lines.add(y1)
-        elif abs(x1 - x2) < 10:  # Vertical line
-            vertical_lines.add(x1)
+    # Find contours in the binary image
+    contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    grid_size = min(len(horizontal_lines) - 1, len(vertical_lines) - 1)
+    # Find the largest rectangular contour (assumed to be the grid)
+    grid_x, grid_y, grid_width, grid_height = 0, 0, 0, 0
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        # Check if the contour is large enough to be the grid
+        if w > grid_width and h > grid_height and w == h:  # Adjust size thresholds as needed
+            grid_x, grid_y, grid_width, grid_height = x, y, w, h
+
+    if grid_width == 0 or grid_height == 0:
+        raise ValueError("Grid not found on the screen.")
+
+    # Debug: Draw the detected grid region on the original image and save it
+    debug_image = screen_image.copy()
+    cv2.rectangle(debug_image, (grid_x, grid_y), (grid_x + grid_width, grid_y + grid_height), (0, 255, 0), 2)
+    debug_image_path = "grid_region_debug.png"
+    cv2.imwrite(debug_image_path, cv2.cvtColor(debug_image, cv2.COLOR_RGB2BGR))
+    logging.info(f"Debug image with detected grid region saved to {debug_image_path}")
+
+    logging.info(f"Detected grid region: (x={grid_x}, y={grid_y}, width={grid_width}, height={grid_height})")
+    return grid_x, grid_y, grid_width, grid_height
+
+
+def capture_and_analyze_grid(grid_region):
+    """
+    Captures a section of the screen, detects the grid size, and identifies grid lines.
+    :param grid_region: A tuple (x, y, width, height) representing the grid's region.
+    :return: A 2D list of cell colors representing the grid.
+    """
+    x, y, width, height = grid_region
+
+    # Capture the grid region
+    screenshot = pyautogui.screenshot(region=(x, y, width, height))
+    image = np.array(screenshot)
+
+    # Save the cropped region for debugging
+    debug_image_path = "cropped_grid_region.png"
+    cv2.imwrite(debug_image_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    logging.info(f"Cropped grid region saved to {debug_image_path}")
+
+    # Convert the image to grayscale
+    gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+    # Apply binary thresholding to highlight grid lines
+    _, binary_image = cv2.threshold(gray_image, 50, 255, cv2.THRESH_BINARY_INV)
+
+    # Save the binary image for debugging
+    cv2.imwrite("binary_grid_debug.png", binary_image)
+
+    # Sum pixel intensities along rows and columns
+    row_sums = np.sum(binary_image, axis=1)  # Sum along rows
+    col_sums = np.sum(binary_image, axis=0)  # Sum along columns
+
+    # Identify peaks in the intensity profiles
+    def find_peaks(sums, axis_length):
+        """
+        Finds grid lines by analyzing the intensity profile.
+        :param sums: The summed pixel intensities along rows or columns.
+        :param axis_length: The length of the axis (height for rows, width for columns).
+        :return: A list of detected line positions.
+        """
+        threshold = np.max(sums) * 0.5  # Threshold for significant intensity
+        lines = [i for i, value in enumerate(sums) if value > threshold]
+
+        # Group nearby lines to account for line thickness
+        grouped_lines = []
+        current_group = [lines[0]]
+        for i in range(1, len(lines)):
+            if lines[i] - lines[i - 1] <= axis_length // 50:  # Adjust grouping threshold dynamically
+                current_group.append(lines[i])
+            else:
+                grouped_lines.append(int(np.mean(current_group)))  # Use the average position of the group
+                current_group = [lines[i]]
+        grouped_lines.append(int(np.mean(current_group)))  # Add the last group
+        return grouped_lines
+
+    horizontal_lines = find_peaks(row_sums, height)
+    vertical_lines = find_peaks(col_sums, width)
+
+    # Ensure the number of horizontal and vertical lines is equal
+    if len(horizontal_lines) != len(vertical_lines):
+        raise ValueError("Mismatch between detected horizontal and vertical lines.")
+
+    # Calculate the grid size
+    grid_size = len(horizontal_lines) - 1  # Number of cells is one less than the number of lines
     logging.info(f"Detected grid size: {grid_size} x {grid_size}")
-    logging.debug(f"Horizontal lines: {sorted(horizontal_lines)}")
-    logging.debug(f"Vertical lines: {sorted(vertical_lines)}")
-    return grid_size
 
-
-def capture_and_analyze_grid(region):
-    """
-    Captures a section of the screen, detects the grid size, and identifies colors.
-    """
-    screenshot = pyautogui.screenshot(region=region)
-    image = Image.fromarray(np.array(screenshot))
-    grid_size = detect_grid_size(image)
-
-    cell_width = region[2] // grid_size
-    cell_height = region[3] // grid_size
-
+    # Extract cell colors
+    cell_width = width // grid_size
+    cell_height = height // grid_size
     cells = []
     for row in range(grid_size):
-        row_colors = []
+        cell_row = []
         for col in range(grid_size):
             # Calculate the center of the cell
             center_x = col * cell_width + cell_width // 2
             center_y = row * cell_height + cell_height // 2
 
-            # Get the exact color at the center of the cell
-            pixel_color = image.getpixel((center_x, center_y))
-            row_colors.append(pixel_color)  # Use the exact color
-        cells.append(row_colors)
+            # Get the color at the center of the cell
+            pixel_color = image[center_y, center_x]
+            cell_row.append(tuple(pixel_color))  # Convert to RGB tuple
+        cells.append(cell_row)
 
-    logging.info(f"Grid colors captured for a {grid_size} x {grid_size} grid.")
-    logging.debug(f"Extracted cells: {cells}")
     return cells
 
 
@@ -134,14 +199,18 @@ def solve(grid):
 
 
 if __name__ == "__main__":
-    region = (389, 265, 502, 501)  # Example region
     try:
         logging.info("Starting grid detection...")
 
-        cells = capture_and_analyze_grid(region)
+        # Detect the grid region dynamically
+        grid_region = detect_grid_region()
+        
+        # Capture and analyze the grid
+        cells = capture_and_analyze_grid(grid_region)
+        print(cells)
         grid = Grid(cells)
 
-        logging.info("Grid successfully built.")
+        # logging.info("Grid successfully built.")
         grid.log_groups()  # Log group details
 
         solve(grid)  # Solve the Queens game

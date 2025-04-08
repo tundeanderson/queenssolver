@@ -111,7 +111,7 @@ class Grid:
             """
             Calculates the squared Euclidean distance between two RGB colors.
             """
-            return sum((c1[i] - c2[i]) ** 2 for i in range(3))
+            return sum((int(c1[i]) - int(c2[i])) ** 2 for i in range(3))
 
         def dfs(cell, group):
             """
@@ -202,7 +202,7 @@ def snap_to_palette(color, palette):
     :return: The nearest color in the palette.
     """
     def color_distance(c1, c2):
-        return sum((c1[i] - c2[i]) ** 2 for i in range(3))
+        return sum((int(c1[i]) - int(c2[i])) ** 2 for i in range(3))
 
     return min(palette, key=lambda p: color_distance(color, p))
 

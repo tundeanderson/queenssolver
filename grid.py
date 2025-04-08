@@ -18,14 +18,8 @@ class Cell:
         self.neighbors = {}
         self.group = None  # Reference to the group this cell belongs to
 
-    @property
-    def label(self):
-        column = chr(ord('A') + self.col)
-        row = self.row + 1
-        return f"{column}{row}"
-
     def __repr__(self):
-        return f"Cell(position={self.label}, color={self.color}, group={self.group})"
+        return f"Cell(row={self.row}, col={self.col}, group={self.group})"
 
 
 class GridGroup:
@@ -35,6 +29,7 @@ class GridGroup:
     def __init__(self, color):
         self.color = color  # RGB tuple
         self.cells = []
+        self.identified_cell = None  # Optional marker for a specific cell
 
     def add_cell(self, cell):
         """
@@ -64,6 +59,16 @@ class Grid:
     def get_cell(self, row, col):
         if 0 <= row < self.rows and 0 <= col < self.cols:
             return self.cells[row][col]
+        return None
+
+    def get_cell_by_label(self, label):
+        """
+        Retrieves a cell object by its label.
+        """
+        for row in self.cells:
+            for cell in row:
+                if cell.label == label:
+                    return cell
         return None
 
     def build(self, cells):
@@ -136,15 +141,16 @@ class Grid:
     def visualize(self, title="Grid Visualization"):
         """
         Visualizes the grid and groups using matplotlib.
-        Each cell is colored based on its RGB value, and grid labels are displayed.
+        Each cell is colored based on its RGB value, and axis labels are displayed.
+        Identified cells are marked with a queen's crown icon.
         """
         fig, ax = plt.subplots(figsize=(self.cols, self.rows))
         ax.set_xlim(0, self.cols)
         ax.set_ylim(0, self.rows)
-        ax.set_xticks(range(self.cols + 1))
-        ax.set_yticks(range(self.rows + 1))
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
+        ax.set_xticks(range(self.cols + 1))  # Include boundary ticks
+        ax.set_yticks(range(self.rows + 1))  # Include boundary ticks
+        ax.set_xticklabels([''] + [chr(ord('A') + i) for i in range(self.cols)], fontsize=10)  # Add empty label for boundary
+        ax.set_yticklabels([''] + [str(i + 1) for i in range(self.rows)], fontsize=10)  # Add empty label for boundary
         ax.grid(color="black", linestyle="-", linewidth=1)
 
         # Draw each cell
@@ -160,17 +166,19 @@ class Grid:
                     rect = mpatches.Rectangle((col, flipped_row), 1, 1, color=normalized_color)
                     ax.add_patch(rect)
 
-                    # Add grid location label (e.g., "A1", "B2")
-                    ax.text(
-                        col + 0.5,
-                        flipped_row + 0.5,
-                        cell.label,
-                        color="black",
-                        ha="center",
-                        va="center",
-                        fontsize=8,
-                        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none", boxstyle="round,pad=0.3"),
-                    )
+                    # Add a marker for identified cells
+                    for group in self.groups:
+                        if group.identified_cell == cell:
+                            ax.text(
+                                col + 0.5,
+                                flipped_row + 0.5,  # Centered in the cell
+                                "♛",  # Queen's crown icon
+                                color="black",
+                                ha="center",
+                                va="center",
+                                fontsize=16,
+                                fontweight="bold",
+                            )
 
         # Add title and show the plot
         ax.set_title(title)
@@ -178,12 +186,12 @@ class Grid:
 
     def log_groups(self):
         """
-        Logs the number of groups, the number of cells in each group, their colors, and the cell labels in each group.
+        Logs the number of groups, the number of cells in each group, their colors, and the cell positions in each group.
         """
         logging.info(f"Total number of groups: {len(self.groups)}")
         for i, group in enumerate(self.groups, start=1):
-            cell_labels = [cell.label for cell in group.cells]
-            logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_labels}")
+            cell_positions = [(cell.row, cell.col) for cell in group.cells]
+            logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_positions}")
 
 
 def snap_to_palette(color, palette):

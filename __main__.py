@@ -15,8 +15,8 @@ def detect_grid_size(image):
     """
     gray_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
     blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
-    edges = cv2.Canny(blurred_image, threshold1=250, threshold2=400)
-    lines = cv2.HoughLinesP(edges, rho=1, theta=np.pi/180, threshold=50, minLineLength=450, maxLineGap=50)
+    edges = cv2.Canny(blurred_image, threshold1=350, threshold2=400)
+    lines = cv2.HoughLinesP(edges, rho=1, theta=np.pi/180, threshold=50, minLineLength=475, maxLineGap=50)
 
     if lines is None:
         raise ValueError("No grid lines detected.")
@@ -33,6 +33,8 @@ def detect_grid_size(image):
 
     grid_size = min(len(horizontal_lines) - 1, len(vertical_lines) - 1)
     logging.info(f"Detected grid size: {grid_size} x {grid_size}")
+    logging.debug(f"Horizontal lines: {sorted(horizontal_lines)}")
+    logging.debug(f"Vertical lines: {sorted(vertical_lines)}")
     return grid_size
 
 
@@ -61,6 +63,7 @@ def capture_and_analyze_grid(region):
         cells.append(row_colors)
 
     logging.info(f"Grid colors captured for a {grid_size} x {grid_size} grid.")
+    logging.debug(f"Extracted cells: {cells}")
     return cells
 
 
@@ -73,9 +76,7 @@ if __name__ == "__main__":
         grid = Grid(cells)
 
         logging.info("Grid successfully built.")
-        logging.info(f"Number of groups: {len(grid.groups)}")
-        for group in grid.groups:
-            logging.info(group)
+        grid.log_groups()  # Log group details
 
         grid.visualize(title="Grid and Groups Visualization")
 

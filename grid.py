@@ -77,6 +77,8 @@ class Grid:
                 cell = Cell(row, col, color)
                 self.set_cell(row, col, cell)
 
+        logging.debug(f"Grid structure after build: {self.cells}")
+
         # Link neighbors
         for row in range(self.rows):
             for col in range(self.cols):
@@ -173,6 +175,15 @@ class Grid:
         # Add title and show the plot
         ax.set_title(title)
         plt.show()
+
+    def log_groups(self):
+        """
+        Logs the number of groups, the number of cells in each group, their colors, and the cell labels in each group.
+        """
+        logging.info(f"Total number of groups: {len(self.groups)}")
+        for i, group in enumerate(self.groups, start=1):
+            cell_labels = [cell.label for cell in group.cells]
+            logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_labels}")
 
 
 def snap_to_palette(color, palette):

@@ -1,5 +1,4 @@
 pyautogui
-pillow
 numpy
 opencv-python
 matplotlib

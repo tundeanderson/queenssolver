@@ -50,14 +50,13 @@ class Grid():
         for row in range(self.rows):
             for col in range(self.cols):
                 cell = self.get_cell(row, col)
-                if row > 0:
-                    cell.neighbors["up"] = self.get_cell(row - 1, col)
-                if row < self.rows - 1:
-                    cell.neighbors["down"] = self.get_cell(row + 1, col)
-                if col > 0:
-                    cell.neighbors["left"] = self.get_cell(row, col - 1)
-                if col < self.cols - 1:
-                    cell.neighbors["right"] = self.get_cell(row, col + 1)
+                neighbors = {
+                    "up": self.get_cell(row - 1, col),
+                    "down": self.get_cell(row + 1, col),
+                    "left": self.get_cell(row, col - 1),
+                    "right": self.get_cell(row, col + 1),
+                }
+                cell.neighbors = {k: v for k, v in neighbors.items() if v}
 
         self.group_cells()
         self.assign_groups()
@@ -108,32 +107,31 @@ class Grid():
         """
         logging.info(f"Total number of groups: {len(self.groups)}")
         for i, group in enumerate(self.groups, start=1):
-            cell_positions = [(cell.row, cell.col) for cell in group.cells]
-            logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_positions}")
+            logging.debug(f"Group {i}: Color={group.color}, Size={len(group.cells)}")
 
     
     def solve(self, debug=False):
         """
         Solves the Queens game by identifying one cell in each group such that:
-        - Exactly one cell is identified in each row, column, and group.
-        - No two identified cells are adjacent (including diagonally).
-        Populates each GridGroup with the identified cell.
+        - Exactly one cell is marked in each row, column, and group.
+        - No two marked cells are adjacent (including diagonally).
+        Populates each GridGroup with the marked cell.
         """
-        identified_cells = set()  # Set of identified Cell objects
-        rows_used = set()  # Rows that already have an identified cell
-        cols_used = set()  # Columns that already have an identified cell
+        marked_cells = set()  # Set of marked Cell objects
+        rows_used = set()  # Rows that already have an marked cell
+        cols_used = set()  # Columns that already have an marked cell
 
         def is_valid(cell):
             """
-            Checks if a cell can be identified without violating the rules.
+            Checks if a cell can be marked without violating the rules.
             """
             # Check if the cell's row or column is already used
             if cell.row in rows_used or cell.col in cols_used:
                 return False
 
             # Check adjacency (including diagonals)
-            for identified_cell in identified_cells:
-                if abs(identified_cell.row - cell.row) <= 1 and abs(identified_cell.col - cell.col) <= 1:
+            for marked_cell in marked_cells:
+                if abs(marked_cell.row - cell.row) <= 1 and abs(marked_cell.col - cell.col) <= 1:
                     return False
 
             return True
@@ -148,69 +146,64 @@ class Grid():
             group = self.groups[group_index]
             for cell in group.cells:
                 if is_valid(cell):
-                    # Mark the cell as identified
-                    identified_cells.add(cell)
+                    # Mark the cell as marked
+                    marked_cells.add(cell)
                     rows_used.add(cell.row)
                     cols_used.add(cell.col)
-                    group.identified_cell = cell
+                    group.marked_cell = cell
 
                     # Recurse to the next group
                     if backtrack(group_index + 1):
                         return True
 
                     # Backtrack: unmark the cell
-                    identified_cells.remove(cell)
+                    marked_cells.remove(cell)
                     rows_used.remove(cell.row)
                     cols_used.remove(cell.col)
-                    group.identified_cell = None
+                    group.marked_cell = None
 
             return False  # No valid cell found for this group
 
         # Initialize the backtracking process
         for group in self.groups:
-            group.identified_cell = None  # Reset identified cells
+            group.marked_cell = None  # Reset marked cells
 
         if not backtrack(0):
             raise ValueError("No solution exists for the given grid.")
 
         logging.info("Solution found!")
         for group in self.groups:
-            logging.info(f"Group {group.color}: Identified Cell = ({group.identified_cell.row}, {group.identified_cell.col})")
+            logging.debug(f"Group {group.color}: Marked Cell = ({group.marked_cell.row}, {group.marked_cell.col})")
 
         if not debug:
-            # Click on the identified cells if not in debug mode
-            self.click_identified_cells()
+            # Click on the marked cells if not in debug mode
+            self.click_marked_cells()
         else:
             self.visualize(title="Grid and Groups")
 
-    def click_identified_cells(self):
+    def click_marked_cells(self, delay=0.1):
         """
-        Clicks on the center of the identified cells using pyautogui.
-        :param grid_region: A tuple (x, y, width, height) representing the grid's region.
-        :param grid: The Grid object containing the identified cells.
+        Clicks on the center of the marked cells using pyautogui.
+        :param delay: Delay between clicks in seconds.
         """
         x, y, width, height = self.region
         cell_width = width // self.cols
         cell_height = height // self.rows
 
         for group in self.groups:
-            if group.identified_cell:
-                # Calculate the screen coordinates of the cell's center
-                cell = group.identified_cell
+            if group.marked_cell:
+                cell = group.marked_cell
                 center_x = x + cell.col * cell_width + cell_width // 2
                 center_y = y + cell.row * cell_height + cell_height // 2
-
-                # Perform the mouse click
                 logging.info(f"Clicking on cell at ({center_x}, {center_y})")
                 pyautogui.doubleClick(center_x, center_y)
-
-                time.sleep(0.05)
+                time.sleep(delay)
 
     def visualize(self, title="Grid Visualization"):
         """
         Visualizes the grid and groups using matplotlib.
         Each cell is colored based on its RGB value, and axis labels are displayed.
-        Identified cells are marked with a queen's crown icon.
+        Marked cells are marked with a queen's crown icon.
         """
         fig, ax = plt.subplots(figsize=(self.cols, self.rows))
         ax.set_xlim(0, self.cols)
@@ -234,9 +227,9 @@ class Grid():
                     rect = mpatches.Rectangle((col, flipped_row), 1, 1, color=normalized_color)
                     ax.add_patch(rect)
 
-                    # Add a marker for identified cells
+                    # Add a marker for marked cells
                     for group in self.groups:
-                        if group.identified_cell == cell:
+                        if group.marked_cell == cell:
                             ax.text(
                                 col + 0.5,
                                 flipped_row + 0.5,

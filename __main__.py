@@ -2,12 +2,10 @@ import logging
 import pyautogui
 import numpy as np
 import cv2
-from PIL import Image
+import time
 from grid import Grid
-import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
 
 def detect_grid_region():
     """
@@ -108,6 +106,10 @@ def capture_and_analyze_grid(grid_region):
     # Ensure the number of horizontal and vertical lines is equal
     if len(horizontal_lines) != len(vertical_lines):
         raise ValueError("Mismatch between detected horizontal and vertical lines.")
+    
+    # LinkedIn preview workaround
+    if len(horizontal_lines) < 5 or len(vertical_lines) < 5:
+        raise ValueError("Too few grid lines detected")
 
     # Calculate the grid size
     grid_size = len(horizontal_lines) - 1  # Number of cells is one less than the number of lines
@@ -131,90 +133,56 @@ def capture_and_analyze_grid(grid_region):
 
     return cells
 
-
-def solve(grid):
+def click_identified_cells(grid_region, grid):
     """
-    Solves the Queens game by identifying one cell in each group such that:
-    - Exactly one cell is identified in each row, column, and group.
-    - No two identified cells are adjacent (including diagonally).
-    Populates each GridGroup with the identified cell.
+    Clicks on the center of the identified cells using pyautogui.
+    :param grid_region: A tuple (x, y, width, height) representing the grid's region.
+    :param grid: The Grid object containing the identified cells.
     """
-    identified_cells = set()  # Set of identified Cell objects
-    rows_used = set()  # Rows that already have an identified cell
-    cols_used = set()  # Columns that already have an identified cell
+    x, y, width, height = grid_region
+    cell_width = width // grid.cols
+    cell_height = height // grid.rows
 
-    def is_valid(cell):
-        """
-        Checks if a cell can be identified without violating the rules.
-        """
-        # Check if the cell's row or column is already used
-        if cell.row in rows_used or cell.col in cols_used:
-            return False
-
-        # Check adjacency (including diagonals)
-        for identified_cell in identified_cells:
-            if abs(identified_cell.row - cell.row) <= 1 and abs(identified_cell.col - cell.col) <= 1:
-                return False
-
-        return True
-
-    def backtrack(group_index):
-        """
-        Backtracking function to identify one cell per group.
-        """
-        if group_index == len(grid.groups):
-            return True  # All groups processed successfully
-
-        group = grid.groups[group_index]
-        for cell in group.cells:
-            if is_valid(cell):
-                # Mark the cell as identified
-                identified_cells.add(cell)
-                rows_used.add(cell.row)
-                cols_used.add(cell.col)
-                group.identified_cell = cell
-
-                # Recurse to the next group
-                if backtrack(group_index + 1):
-                    return True
-
-                # Backtrack: unmark the cell
-                identified_cells.remove(cell)
-                rows_used.remove(cell.row)
-                cols_used.remove(cell.col)
-                group.identified_cell = None
-
-        return False  # No valid cell found for this group
-
-    # Initialize the backtracking process
     for group in grid.groups:
-        group.identified_cell = None  # Reset identified cells
+        if group.identified_cell:
+            # Calculate the screen coordinates of the cell's center
+            cell = group.identified_cell
+            center_x = x + cell.col * cell_width + cell_width // 2
+            center_y = y + cell.row * cell_height + cell_height // 2
 
-    if not backtrack(0):
-        raise ValueError("No solution exists for the given grid.")
+            # Perform the mouse click
+            logging.info(f"Clicking on cell at ({center_x}, {center_y})")
+            pyautogui.doubleClick(center_x, center_y)
 
-    logging.info("Solution found!")
-    for group in grid.groups:
-        logging.info(f"Group {group.color}: Identified Cell = ({group.identified_cell.row}, {group.identified_cell.col})")
-
+            # Add a small delay between clicks
+            time.sleep(0.1)
 
 if __name__ == "__main__":
     try:
         logging.info("Starting grid detection...")
 
-        # Detect the grid region dynamically
-        grid_region = detect_grid_region()
+        while True:
+            try:
+                # Detect the grid region dynamically
+                grid_region = detect_grid_region()
+                
+                # Capture and analyze the grid
+                cells = capture_and_analyze_grid(grid_region)
+                break
+            except:
+                logging.info("No grid detected, waiting...")
+                time.sleep(1)
         
-        # Capture and analyze the grid
-        cells = capture_and_analyze_grid(grid_region)
-        print(cells)
         grid = Grid(cells)
 
-        # logging.info("Grid successfully built.")
+        logging.info("Grid successfully built.")
         grid.log_groups()  # Log group details
 
-        solve(grid)  # Solve the Queens game
-        grid.visualize(title="Grid and Groups Visualization")
+        grid.solve()  # Solve the Queens game
+        #grid.visualize(title="Grid and Groups Visualization")
+
+        # Click on the identified cells
+        click_identified_cells(grid_region, grid)
 
     except ValueError as e:
         logging.error(f"Error: {e}")

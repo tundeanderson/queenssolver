@@ -1,48 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import pyautogui
-from PIL import Image
-import numpy as np
 import logging
-import cv2
 
-
-class Cell:
-    """
-    Represents a single cell in the grid.
-    """
-    def __init__(self, row, col, color):
-        self.row = row
-        self.col = col
-        self.color = color  # RGB tuple
-        self.neighbors = {}
-        self.group = None  # Reference to the group this cell belongs to
-
-    def __repr__(self):
-        return f"Cell(row={self.row}, col={self.col}, group={self.group})"
-
-
-class GridGroup:
-    """
-    Represents a group of connected cells with the same color.
-    """
-    def __init__(self, color):
-        self.color = color  # RGB tuple
-        self.cells = []
-        self.identified_cell = None  # Optional marker for a specific cell
-
-    def add_cell(self, cell):
-        """
-        Adds a cell to the group.
-        """
-        self.cells.append(cell)
-        cell.group = self.color  # Assign the group identifier to the cell
-
-    def __repr__(self):
-        return f"GridGroup(color={self.color}, size={len(self.cells)})"
-
-
-class Grid:
+class Grid():
     """
     Represents the entire grid of cells.
     """
@@ -138,6 +98,72 @@ class Grid:
                     dfs(cell, group)
                     self.groups.append(group)
 
+    
+    def solve(self):
+        """
+        Solves the Queens game by identifying one cell in each group such that:
+        - Exactly one cell is identified in each row, column, and group.
+        - No two identified cells are adjacent (including diagonally).
+        Populates each GridGroup with the identified cell.
+        """
+        identified_cells = set()  # Set of identified Cell objects
+        rows_used = set()  # Rows that already have an identified cell
+        cols_used = set()  # Columns that already have an identified cell
+
+        def is_valid(cell):
+            """
+            Checks if a cell can be identified without violating the rules.
+            """
+            # Check if the cell's row or column is already used
+            if cell.row in rows_used or cell.col in cols_used:
+                return False
+
+            # Check adjacency (including diagonals)
+            for identified_cell in identified_cells:
+                if abs(identified_cell.row - cell.row) <= 1 and abs(identified_cell.col - cell.col) <= 1:
+                    return False
+
+            return True
+
+        def backtrack(group_index):
+            """
+            Backtracking function to identify one cell per group.
+            """
+            if group_index == len(self.groups):
+                return True  # All groups processed successfully
+
+            group = self.groups[group_index]
+            for cell in group.cells:
+                if is_valid(cell):
+                    # Mark the cell as identified
+                    identified_cells.add(cell)
+                    rows_used.add(cell.row)
+                    cols_used.add(cell.col)
+                    group.identified_cell = cell
+
+                    # Recurse to the next group
+                    if backtrack(group_index + 1):
+                        return True
+
+                    # Backtrack: unmark the cell
+                    identified_cells.remove(cell)
+                    rows_used.remove(cell.row)
+                    cols_used.remove(cell.col)
+                    group.identified_cell = None
+
+            return False  # No valid cell found for this group
+
+        # Initialize the backtracking process
+        for group in self.groups:
+            group.identified_cell = None  # Reset identified cells
+
+        if not backtrack(0):
+            raise ValueError("No solution exists for the given grid.")
+
+        logging.info("Solution found!")
+        for group in self.groups:
+            logging.info(f"Group {group.color}: Identified Cell = ({group.identified_cell.row}, {group.identified_cell.col})")
+
     def visualize(self, title="Grid Visualization"):
         """
         Visualizes the grid and groups using matplotlib.
@@ -176,7 +202,7 @@ class Grid:
                                 color="black",
                                 ha="center",
                                 va="center",
-                                fontsize=16,
+                                fontsize=24,
                                 fontweight="bold",
                             )
 
@@ -193,29 +219,35 @@ class Grid:
             cell_positions = [(cell.row, cell.col) for cell in group.cells]
             logging.info(f"Group {i}: Color={group.color}, Size={len(group.cells)}, Cells={cell_positions}")
 
-
-def snap_to_palette(color, palette):
+class Cell():
     """
-    Snaps an RGB color to the nearest color in the given palette.
-    :param color: A tuple (R, G, B) representing the color.
-    :param palette: A list of RGB tuples representing the color palette.
-    :return: The nearest color in the palette.
+    Represents a single cell in the grid.
     """
-    def color_distance(c1, c2):
-        return sum((int(c1[i]) - int(c2[i])) ** 2 for i in range(3))
+    def __init__(self, row, col, color):
+        self.row = row
+        self.col = col
+        self.color = color  # RGB tuple
+        self.neighbors = {}
+        self.group = None  # Reference to the group this cell belongs to
 
-    return min(palette, key=lambda p: color_distance(color, p))
+    def __repr__(self):
+        return f"Cell(row={self.row}, col={self.col}, group={self.group})"
 
-
-def quantize_colors_with_palette(cells, palette):
+class GridGroup():
     """
-    Reduces the number of unique colors in the grid by snapping to a predefined palette.
-    :param cells: A 2D list of RGB tuples representing the grid colors.
-    :param palette: A list of RGB tuples representing the color palette.
-    :return: A 2D list of quantized RGB tuples.
+    Represents a group of connected cells with the same color.
     """
-    quantized_cells = []
-    for row in cells:
-        quantized_row = [snap_to_palette(color, palette) for color in row]
-        quantized_cells.append(quantized_row)
-    return quantized_cells
+    def __init__(self, color):
+        self.color = color  # RGB tuple
+        self.cells = []
+        self.identified_cell = None  # Optional marker for a specific cell
+
+    def add_cell(self, cell):
+        """
+        Adds a cell to the group.
+        """
+        self.cells.append(cell)
+        cell.group = self.color  # Assign the group identifier to the cell
+
+    def __repr__(self):
+        return f"GridGroup(color={self.color}, size={len(self.cells)})"
